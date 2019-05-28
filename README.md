@@ -162,7 +162,7 @@ Reference link for Alpha 21264 https://ieeexplore.ieee.org/document/755465
 
 #### Custom
 
-Now that you have implemented 3 other predictors with rigid requirements, you now have the opportunity to be creative and design your own predictor.  The only requirement is that the total size of your custom predictor must not exceed (16K + 256) bits (not bytes) of stored data and that your custom predictor must outperform both the Gshare and Tournament predictors (details below).
+Now that you have implemented 3 other predictors with rigid requirements, you now have the opportunity to be creative and design your own predictor.  In order to get 5% extra credit, the only requirement is that the total size of your custom predictor must not exceed (16K + 256) bits (not bytes) of stored data and that your custom predictor must outperform both the Gshare and Tournament predictors (details below). If you don't adhere to this requirement but still outform the other two predictors, you will still be eligible to get full score.
 
 #### Things to note
 
