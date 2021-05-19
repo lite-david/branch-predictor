@@ -52,6 +52,10 @@ void init_gshare(){
   // Size of BHT depends on number of bits used 
   int bht_entries = 1 << ghistoryBits;
   bht_gshare = (uint8_t*)malloc(bht_entries * sizeof(uint8_t));
+  int i = 0;
+  for(i = 0; i< bht_entries; i++){
+    bht_gshare[i] = WN;
+  }
   ghistory = 0;
 }
 
@@ -61,6 +65,9 @@ uint8_t make_prediction_gshare(uint32_t pc){
   int pc_lower_bits = pc & (bht_entries-1);
   //Get index into bht table by xor pc and history
   int index = pc_lower_bits ^ ghistory;
+  if(verbose){
+    printf("bht_entries: %d, pc_lower_bits: %d, ghistory: %d, index: %d \n", bht_entries, pc_lower_bits, ghistory, index);
+  }
   switch(bht_gshare[index]){
     case WN:
       return NOTTAKEN;
@@ -171,5 +178,15 @@ train_predictor(uint32_t pc, uint8_t outcome)
 
 void 
 cleanup() {
-  cleanup_gshare();
+  switch (bpType) {
+    case STATIC:
+      break;
+    case GSHARE:
+      cleanup_gshare();
+      break;
+    case TOURNAMENT:
+    case CUSTOM:
+    default:
+      break;
+  }
 }
