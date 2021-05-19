@@ -37,10 +37,77 @@ int verbose;
 //TODO: Add your own Branch Predictor data structures here
 //
 
+uint8_t *bht_gshare;
+uint32_t ghistory;
+
 
 //------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
+
+//Gshare functions 
+
+void init_gshare(){
+  // Allocate an array to use as BHT
+  // Size of BHT depends on number of bits used 
+  int bht_entries = 1 << ghistoryBits;
+  bht_gshare = (uint8_t*)malloc(bht_entries * sizeof(uint8_t));
+  ghistory = 0;
+}
+
+uint8_t make_prediction_gshare(uint32_t pc){
+  //get lower ghistoryBits of pc
+  int bht_entries = 1 << ghistoryBits;
+  int pc_lower_bits = pc & (bht_entries-1);
+  //Get index into bht table by xor pc and history
+  int index = pc_lower_bits ^ ghistory;
+  switch(bht_gshare[index]){
+    case WN:
+      return NOTTAKEN;
+    case SN:
+      return NOTTAKEN;
+    case WT:
+      return TAKEN;
+    case ST:
+      return TAKEN;
+    default:
+      printf("Warning: Undefined state of entry in BHT!\n");
+      return NOTTAKEN;
+  }
+}
+
+void train_gshare(uint32_t pc, uint8_t outcome){
+  //get lower ghistoryBits of pc
+  int bht_entries = 1 << ghistoryBits;
+  int pc_lower_bits = pc & (bht_entries-1);
+  int index = pc_lower_bits ^ ghistory;
+
+  //Update state of entry in bht based on outcome
+  switch(bht_gshare[index]){
+    case WN:
+      bht_gshare[index] = (outcome==TAKEN)?WT:SN;
+      break;
+    case SN:
+      bht_gshare[index] = (outcome==TAKEN)?WN:SN;
+      break;
+    case WT:
+      bht_gshare[index] = (outcome==TAKEN)?ST:WN;
+      break;
+    case ST:
+      bht_gshare[index] = (outcome==TAKEN)?ST:WT;
+      break;
+    default:
+      printf("Warning: Undefined state of entry in BHT!\n");
+  }
+
+  //Update history register
+  ghistory = ((ghistory << 1) | outcome); 
+  ghistory = ghistory & (bht_entries -1);
+}
+
+void cleanup_gshare(){
+  free(bht_gshare);
+}
 
 // Initialize the predictor
 //
@@ -49,7 +116,7 @@ init_predictor()
 {
   //
   //TODO: Initialize Branch Predictor Data Structures
-  //
+  init_gshare();
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
@@ -68,6 +135,7 @@ make_prediction(uint32_t pc)
     case STATIC:
       return TAKEN;
     case GSHARE:
+      return make_prediction_gshare(pc);
     case TOURNAMENT:
     case CUSTOM:
     default:
@@ -88,4 +156,20 @@ train_predictor(uint32_t pc, uint8_t outcome)
   //
   //TODO: Implement Predictor training
   //
+  switch (bpType) {
+    case STATIC:
+      break;
+    case GSHARE:
+      train_gshare(pc, outcome);
+      break;
+    case TOURNAMENT:
+    case CUSTOM:
+    default:
+      break;
+  }
+}
+
+void 
+cleanup() {
+  cleanup_gshare();
 }
