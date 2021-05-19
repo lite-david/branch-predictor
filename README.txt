@@ -1,6 +1,3 @@
-# branch-predictor
-CSE 240A branch predictor course project 
-=======
 # CSE240A Branch Predictor Project
 
 ## Table of Contents
@@ -12,11 +9,11 @@ CSE 240A branch predictor course project
   * [Running your predictor](#running-your-predictor)
   * [Implementing the predictors](#implementing-the-predictors)
     - [Gshare](#gshare)
+    - [Local](#local)
     - [Tournament](#tournament)
     - [Custom](#custom)
     - [Things to note](#things-to-note)
   * [Grading](#grading)
-    - [Grading the custom predictor](#grading-the-custom-predictor)
   * [Turn-in Instructions](#turn-in-instructions)
 
 ## Introduction
@@ -31,13 +28,13 @@ Please make sure you do not copy a single line of code from any source.  Not fro
 
 ## Get Started
 
-As mentioned, we provide a starting framework to help you design your predictors. The source code (including some traces for testing) is in github and you can get it with `git clone https://github.com/prannoy/CSE240A.git`.
+As mentioned, we provide a starting framework to help you design your predictors. The source code (including some traces for testing) is in github and you can get it with `git clone https://github.com/prodromou87/CSE240A.git`.
 
-Alternatively, you can download it from [our github page](https://github.com/prannoy/CSE240A.git).
+Alternatively, you can download it from [our github page](https://github.com/prodromou87/CSE240A.git).
 
-You have the option to write your project in C, C++ or Python. We only provide a framework written in C and we strongly recommend you use it, primarily to ensure compatibility with our autograder.
+You have the option to write your project in C, C++ or Python. We only provide a framework written in C and we strongly recommend you use it, primarily to ensure compatibility with our autograder. 
 
-If you decide to use some of the other supported languages, you will have to implement everything. You also have to make sure that running `make` in the src directory generates an executable named 'predictor'. During grading, our script will run a `make clean`, followed by a `make` command. Make sure that this step is not going to delete your code, especially if you are writing it in Python. Finally, make sure that your project runs with the exact same commands as this document describes. Python submissions must run with `./predictor`, without requiring `python ./predictor`. You can submit a custom Makefile to serve the needs of your code.
+If you decide to use some of the other supported languages, you will have to implement everything. You also have to make sure that running `make` in the src directory generates an executable named 'predictor'. During grading, our script will run a `make clean`, followed by a `make` command. Make sure that this step is not going to delete your code, especially if you are writing it in Python. Finally, make sure that your project runs with the exact same commands as this document describes. Python submissions must run with `./predictor`, without requiring `python ./predictor`.
 
 ## Working with Docker
 
@@ -51,16 +48,16 @@ docker pull prodromou87/ucsd_cse240a
 
 This command will download and build our docker image. It will take a while, but you only have to do this step once. To verify that you have the image, you can run `docker images` and check the the image is listed.
 
-Once you have it, you can start an interactive shell in Docker with
+Once you have it, you can start an interactive shell in Docker with 
 
 ```
 docker run --rm -it prodromou87/ucsd_cse240a
 
-The --rm flag will delete the running container once
-you exit it so it doesn't keep consuming resources
+The --rm flag will delete the running container once 
+you exit it so it doesn't keep consuming resources 
 from the host machine.
 
-The -it flag will start an interactive session so it's
+The -it flag will start an interactive session so it's 
 necessary if you want a shell to work with.
 ```
 
@@ -112,10 +109,10 @@ being run are as follows:
 
 ```
   --help       Print usage message
-  --verbose    Outputs all predictions made by your
-               mechanism. Will be used for correctness
+  --verbose    Outputs all predictions made by your 
+               mechanism. Will be used for correctness 
                grading.
-  --<type>     Branch prediction scheme. Available
+  --<type>     Branch prediction scheme. Available 
                types are:
         static
         gshare:<# ghistory>
@@ -168,14 +165,14 @@ Now that you have implemented 3 other predictors with rigid requirements, you no
 
 #### Things to note
 
-All history should be initialized to NOTTAKEN.  History registers should be updated by shifting in new history to the least significant bit position.
+All history should be initialized to NOTTAKEN.  History registers should be updated by shifting in new history to the least significant bit position. 
 ```
 Ex. 4 bits of history, outcome of next branch is NT
   T NT T NT   <<  NT
   Result: NT T NT NT
 ```
 ```
-All 2-bit predictors should be initialized to WN (Weakly Not Taken).
+All 2-bit predictors should be initialized to WN (Weakly Not Taken). 
 They should also have the following state transitions:
 
         NT      NT      NT
@@ -189,27 +186,19 @@ The Choice Predictor used to select which predictor to use in the Alpha 21264 To
 
 ## Grading
 
-All grading will be done with respect to your predictor's Misprediciton Rate, as well as its correctness (for Gshare and Tournament) compared to our implementation.
+All grading will be done with respect to your predictor's Misprediciton Rate, as well as its correctness (for Gshare and Tournament) compared to our implementation. 
 
-You get 10 points for correctness of the gshare and tournament predictors (20 points max grade for correctness). If your predictions match the correct output, you get full points. You get 15 points if your custom predictor beats one of the other two (gshare and tournament), and +15 points (30 total) if you beat both of them.
+You get 10 points for correctness. If your predictions match the correct output, you get full points. You get 30 points if your custom predictor beats one of the other two, and +10 points (40 total) if you beat both of them.
 
-Finally, the 6 best custom predictors (in terms of misprediction rate), will receive extra points. First place gets 6 points, second place gets 5, third gets 4 and so on. **The maximum grade is 56. If your custom predictor does not rank in the top 6, the maximum score you can get is 50/56.**
-
-If you are ranked in the top 6, we need a clear description (in comments in your code) of the number of bits you are using. For example, write something like: I implemented **[X]** as my custom predictor. **[Brief description of how it works]**. This predictor uses two structures. The first one is **[variable name in code]** and the second is **[variable name]**. Then for each structure present the math to calculate its size. We will verify its correctness before you receive the bonus points. Adjust the above text as necessary.
+Finally, the 10 best predictors (in terms of misprediction rate), will receive extra points. First place gets 10 points, second place gets 9, third gets 8 and so on. **The maximum grade is 60. If your custom predictor does not rank in the top 10, the maximum score you can get is 50/60.**
 
 You should do most of your development on your own machine. If you face any issues when you submit your project in gradescope, try to run your project in our Docker image to ensure compatibility with the autograder, or post the error message in Piazza.
 
-#### Grading the custom predictor
-
-We will be comparing your custom predictor against a Gshare predictor with 13 bits of global history (--global:13), which is the largest possible Gshare that fits the 16kb budget. We will also be comparing it against a Tournament predictor of about 14kb. This predictor uses 9 bits of global history, 10 bits of local history and 10 PC bits (--tournamet:9:10:10). These are the two predictors you have to outperform.
-
-For each predictor (gshare:13, tournament:9:10:10 and your custom predictor), we will calculate the average missprediction rate accross all 12 of our traces. Out of those 12, six are visible to you and provided along with the starter code to use during development. The remaining six will remain hidden. Your predictor's average missprediction rate must be better (lower) than the other two to get all the points (minus the bonus points for top ranked predictors).
-
 ## Turn-in instructions
 
-**DUE: Nov 12 2019 - Submissions after 11:59:59 PM are considered late**
+**DUE: May 26 2017 - Submissions after 11:59:59 PM are considered late**
 
- A project is considered late at 12:00:01 AM (Which is 1 second past Midnight).
+Late projects are allowed for at most 3 days after the project due date.  For each day late a 10% grade penalty is automatically attached (e.g. 3 days late = 30% penalty).  After 3 days, missing projects will recieve a zero.  A project is considered late at 12:00:01 AM (Which is 1 second past Midnight).
 
 To submit your project, compress the 'src' folder in a **.zip** (not .rar) file and upload it in gradescope. Select only the source files required for compilation and nothing else (binaries, traces etc should not be submitted). This will trigger our autograder to begin grading. You are allowed to submit multiple times.
 
@@ -221,6 +210,7 @@ We first ensure that your code is compatible with our autograder. If your code f
   - `make` produces an executable named `predictor`
   - The output produced by your executable has the expected format
 
-Once you pass the compatibility test, we grade the output produced by your code. You will be able to see your score on some of our test cases, but some will be hidden. Your overall grade will not be visible until after the project's due date.
+Once you pass the compatibility test, we grade the output produced by your code. You will be able to see your score on some of our test cases, but some will be hidden. Your overall grade will not be visible until after the project's due date. 
 
 **Note:** Gradescope expects pass/fail tests but we will be reporting percentages. If you don't score 100%, Gradescope considers it a failed tests. Do not be concerned when you see failed tests (but be concerned if your score is low and re-submit)
+
