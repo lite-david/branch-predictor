@@ -31,7 +31,6 @@ int bpType;       // Branch Prediction Type
 int verbose;
 
 //TAGE predictor settings
-int history_growth; // factor for history length growth across BHTs
 int initial_history_bits; // Starting history length
 int num_histories; // Number of BHTs
 
@@ -56,8 +55,19 @@ uint64_t ghistory;
 
 //Double pointer to store multiple branch history tables and their corresponding tags
 //For TAGE custom predictor
-uint8_t **bht_set;
+uint8_t **bht_ctrs;
 uint8_t **bht_tags;
+uint8_t **bht_usebits;
+int tage_index_bits;
+uint64_t tage_table_size;
+int prediction_count;
+uint8_t useful_bit_clear;
+
+//For bimodal predictor
+uint8_t *bimodal_table;
+int bimodal_index_bits;
+int bimodal_table_size;
+
 //------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
@@ -264,7 +274,7 @@ uint8_t make_prediction_gshare(uint32_t pc){
     case ST:
       return TAKEN;
     default:
-      printf("Warning: Undefined state of entry in BHT!\n");
+      printf("Warning: Undefined state of entry in GSHARE BHT!\n");
       return NOTTAKEN;
   }
 }
@@ -291,7 +301,7 @@ void train_gshare(uint32_t pc, uint8_t outcome){
       bht_gshare[index] = (outcome==TAKEN)?ST:WT;
       break;
     default:
-      printf("Warning: Undefined state of entry in BHT!\n");
+      printf("Warning: Undefined state of entry in GSHARE BHT!\n");
   }
 
   //Update history register
@@ -302,50 +312,130 @@ void cleanup_gshare(){
   free(bht_gshare);
 }
 
+// Bimodal branch prediction
+
+void init_bimodal(){
+  bimodal_table_size = 1<<bimodal_index_bits;
+  bimodal_table = (uint8_t*)malloc(bimodal_table_size * sizeof(uint8_t));
+  int i = 0;
+  for(i = 0; i< bimodal_table_size; i++ ){
+    bimodal_table[i] = WN;
+  }
+}
+
+uint8_t make_prediction_bimodal(uint32_t pc){
+  switch(bimodal_table[pc%bimodal_table_size]){
+    case WN:
+      return NOTTAKEN;
+    case SN:
+      return NOTTAKEN;
+    case WT:
+      return TAKEN;
+    case ST:
+      return TAKEN;
+    default:
+      printf("Warning: Undefined state of entry in bimodal table!\n");
+      return NOTTAKEN;
+  }
+}
+
+void train_bimodal(uint32_t pc, uint8_t outcome){
+  switch(bimodal_table[pc%bimodal_table_size]){
+    case WN:
+      bimodal_table[pc%bimodal_table_size] = (outcome==TAKEN)?WT:SN;
+      break;
+    case SN:
+      bimodal_table[pc%bimodal_table_size] = (outcome==TAKEN)?WN:SN;
+      break;
+    case WT:
+      bimodal_table[pc%bimodal_table_size] = (outcome==TAKEN)?ST:WN;
+      break;
+    case ST:
+      bimodal_table[pc%bimodal_table_size] = (outcome==TAKEN)?ST:WT;
+      break;
+    default:
+      printf("Warning: In training, Undefined state of entry in Bimodal table!\n");
+  }
+}
+
+void cleanup_bimodal(){
+  free(bimodal_table);
+}
+
 // TAGE functions
 
 void init_tage(){
   //TAGE uses the gshare with 2 bit history as a base predictor 
-  ghistoryBits = 2;
-  init_gshare();
+  bimodal_index_bits = 12;
+  tage_index_bits = 11;
+  prediction_count = 0;
+  useful_bit_clear = 0xFE;
+  tage_table_size = 1<<tage_index_bits;
+  init_bimodal();
   //Improves upon base prediction with additional varying length tagged history tables 
-  initial_history_bits = 4;
-  history_growth = 2;
-  num_histories = 2;
+  num_histories = 3;
+
   
   //Allocate additional BHTs and tag 
-  bht_set = (uint8_t**)malloc(num_histories*sizeof(uint8_t*));
+  bht_ctrs = (uint8_t**)malloc(num_histories*sizeof(uint8_t*));
+  bht_usebits = (uint8_t**)malloc(num_histories*sizeof(uint8_t*));
   bht_tags = (uint8_t**)malloc(num_histories*sizeof(uint8_t*));
   int i =0;
   for(i = 0; i< num_histories; i++){
-    int history_bits = initial_history_bits*pow(history_growth, i); 
-    bht_set[i] = (uint8_t*)malloc(1<<history_bits * sizeof(uint8_t));
-    bht_tags[i] = (uint8_t*)malloc(1<<history_bits * sizeof(uint8_t));
+    bht_ctrs[i] = (uint8_t*)malloc(tage_table_size * sizeof(uint8_t));
+    bht_tags[i] = (uint8_t*)malloc(tage_table_size * sizeof(uint8_t));
+    bht_usebits[i] = (uint8_t*)malloc(tage_table_size * sizeof(uint8_t));
   }
 }
 
+uint8_t get_tag_tage(uint32_t pc){
+    return ((pc & 0xF0) >> 4);
+}
+
+uint32_t get_index_tage(uint32_t pc, int history_bits){
+  uint32_t pc_lower_bits = pc & (tage_table_size-1);
+  uint32_t running_xor = tage_index_bits;
+  uint32_t ghistory_lower_bits = ghistory & (tage_table_size -1);
+  uint32_t index = pc_lower_bits ^ ghistory_lower_bits;
+  uint64_t temp64;
+  uint32_t temp32;
+  while(running_xor < history_bits){
+    temp64 = ghistory & ((tage_table_size -1) << running_xor);
+    temp64 = temp64 >> (running_xor - history_bits);
+    temp32 = temp64;
+    index = index ^ temp32;
+    running_xor += tage_index_bits;
+  }
+  if(verbose){
+    printf("pc_lower_bits: %d, ghistory %lu, index: %d, pc: %d, history_bits: %d\n", pc_lower_bits, ghistory, index, pc, history_bits);
+  }
+  return index;
+}
+
 uint8_t make_prediction_tage(uint32_t pc){
-  uint8_t prediction = make_prediction_gshare(pc);
+  prediction_count++;
+  uint8_t prediction = make_prediction_bimodal(pc);
   int i = 0;
   for(i = 0; i< num_histories; i++){
-    int history_bits = initial_history_bits*pow(history_growth, i); 
-    uint32_t bht_entries = 1 << history_bits;
-    uint32_t pc_lower_bits = pc & (bht_entries-1);
-    uint32_t ghistory_lower_bits = ghistory & (bht_entries -1);
-    uint32_t index = pc_lower_bits ^ ghistory_lower_bits;
-    uint8_t tag = ((pc & 0xFF0000) >> 16);
+    int history_bits = tage_index_bits + tage_index_bits*i; 
+    uint32_t index = get_index_tage(pc, history_bits);
+    uint8_t tag = get_tag_tage(pc);
     if(bht_tags[i][index] == tag){
-      switch(bht_set[i][index]){
+      switch(bht_ctrs[i][index]){
         case WN:
           prediction = NOTTAKEN;
+          break;
         case SN:
           prediction = NOTTAKEN;
+          break;
         case WT:
           prediction = TAKEN;
+          break;
         case ST:
           prediction = TAKEN;
+          break;
         default:
-          printf("Warning: Undefined state of entry in BHT!\n");
+          printf("Warning: In prediction, Undefined state of entry in TAGE BHT!\n");
           prediction = NOTTAKEN;
       }
     }
@@ -354,19 +444,117 @@ uint8_t make_prediction_tage(uint32_t pc){
 }
 
 void train_tage(uint32_t pc, uint8_t outcome){
-  //TODO Implement training of rest of the BHTs
-  train_gshare(pc, outcome);
+  //Train bimodal predictor
+  uint8_t prediction = make_prediction_bimodal(pc);
+  uint8_t altpred_prediction = prediction;
+  train_bimodal(pc, outcome);
+  int i = 0;
+  int pred_bht = -1;
+  int altpred_bht = -1;
+  // Find pred and alt_pred bhts
+  for(i = 0; i< num_histories; i++){
+    int history_bits = tage_index_bits + tage_index_bits*i; 
+    uint32_t index = get_index_tage(pc, history_bits);
+    uint8_t tag = get_tag_tage(pc);
+    if(bht_tags[i][index] == tag){
+      altpred_bht = pred_bht; 
+      altpred_prediction = prediction;
+      pred_bht = i;
+      switch(bht_ctrs[i][index]){
+        case WN:
+          prediction = NOTTAKEN;
+          break;
+        case SN:
+          prediction = NOTTAKEN;
+          break;
+        case WT:
+          prediction = TAKEN;
+          break;
+        case ST:
+          prediction = TAKEN;
+          break;
+        default:
+          printf("Warning: In prediction, Undefined state of entry in TAGE BHT!\n");
+          prediction = NOTTAKEN;
+      }
+    }
+  }
+  if(pred_bht > -1){
+    int pred_history_bits = tage_index_bits + tage_index_bits*pred_bht; 
+    uint32_t pred_index = get_index_tage(pc, pred_history_bits);
+    // If there's a prediction provider update it's counters. 
+    switch(bht_ctrs[pred_bht][pred_index]){
+      case WN:
+        bht_ctrs[pred_bht][pred_index] = (outcome==TAKEN)?WT:SN;
+        break;
+      case SN:
+        bht_ctrs[pred_bht][pred_index] = (outcome==TAKEN)?WN:SN;
+        break;
+      case WT:
+        bht_ctrs[pred_bht][pred_index] = (outcome==TAKEN)?ST:WN;
+        break;
+      case ST:
+        bht_ctrs[pred_bht][pred_index] = (outcome==TAKEN)?ST:WT;
+        break;
+      default:
+        printf("Warning: In training, Undefined state of entry in Bimodal table!\n");
+    }
+    // if altpred differes from prediction, update the usefulness counter accordingly
+    if(altpred_prediction != prediction){
+      if(prediction == outcome)
+        bht_usebits[pred_bht][pred_index] = fmin(3, bht_usebits[pred_bht][pred_index] + 1);
+      else
+        bht_usebits[pred_bht][pred_index] = fmax(0, bht_usebits[pred_bht][pred_index] - 1);
+    }
+  }
+  // If the prediction provider isn't from the bht with longest history, (try to) allocate a new entry
+  if(pred_bht < num_histories - 1){
+    int allocated_entry = 0;
+    for(i = pred_bht+1; i< num_histories; i++){
+      int new_entry_history_bits = tage_index_bits + tage_index_bits*i; 
+      uint32_t new_entry_index = get_index_tage(pc, new_entry_history_bits);
+      uint8_t new_entry_tag = get_tag_tage(pc);
+      if(bht_usebits[i][new_entry_index] == 0){
+        bht_ctrs[i][new_entry_index] = (outcome == TAKEN)?WT:WN;
+        bht_tags[i][new_entry_index] = new_entry_tag;
+        allocated_entry = 1;
+        break;
+      }
+    }
+    if(!allocated_entry){
+      for(i = pred_bht+1; i< num_histories; i++){
+        int new_entry_history_bits = tage_index_bits + tage_index_bits*i; 
+        uint32_t new_entry_index = get_index_tage(pc, new_entry_history_bits);
+        uint8_t new_entry_tag = get_tag_tage(pc);
+        bht_usebits[i][new_entry_index]--;
+      }
+    }
+  }
+  //Update history
+  ghistory = ((ghistory << 1) | outcome); 
+  if(prediction_count > 256000){
+    for(i = 0; i< num_histories; i++){
+      int j = 0;
+      for(j = 0; j< tage_table_size; j++){
+        bht_usebits[i][j] = bht_usebits[i][j] & useful_bit_clear;
+      }
+    }
+    useful_bit_clear = (useful_bit_clear == 0xFD)?0xFE:0xFD;
+    prediction_count = 0;
+  }
 }
 
 void cleanup_tage(){
-  cleanup_gshare();
+  cleanup_bimodal();
   int i =0;
   for(i = 0; i< num_histories; i++){
-    free(bht_set[i]);
+    free(bht_ctrs[i]);
     free(bht_tags[i]);
+    free(bht_usebits[i]);
   }
-  free(bht_set);
+  free(bht_ctrs);
   free(bht_tags);
+  free(bht_usebits);
 }
 
 
