@@ -59,6 +59,7 @@ uint8_t **bht_ctrs;
 uint8_t **bht_tags;
 uint8_t **bht_usebits;
 int tage_index_bits;
+int tage_history_bits;
 uint64_t tage_table_size;
 int prediction_count;
 uint8_t useful_bit_clear;
@@ -67,6 +68,13 @@ uint8_t useful_bit_clear;
 uint8_t *bimodal_table;
 int bimodal_index_bits;
 int bimodal_table_size;
+
+//For perceptron predictor
+int **perceptrons;
+int perceptron_history_length;
+int n_perceptrons;
+int threshold;
+
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -366,14 +374,16 @@ void cleanup_bimodal(){
 
 void init_tage(){
   //TAGE uses the gshare with 2 bit history as a base predictor 
-  bimodal_index_bits = 12;
-  tage_index_bits = 11;
+  bimodal_index_bits = 7;
+  ghistory = 0;
+  tage_index_bits = 12;
+  tage_history_bits = 15;
   prediction_count = 0;
   useful_bit_clear = 0xFE;
   tage_table_size = 1<<tage_index_bits;
   init_bimodal();
   //Improves upon base prediction with additional varying length tagged history tables 
-  num_histories = 3;
+  num_histories = 2;
 
   
   //Allocate additional BHTs and tag 
@@ -381,15 +391,23 @@ void init_tage(){
   bht_usebits = (uint8_t**)malloc(num_histories*sizeof(uint8_t*));
   bht_tags = (uint8_t**)malloc(num_histories*sizeof(uint8_t*));
   int i =0;
+  int j = 0;
   for(i = 0; i< num_histories; i++){
     bht_ctrs[i] = (uint8_t*)malloc(tage_table_size * sizeof(uint8_t));
     bht_tags[i] = (uint8_t*)malloc(tage_table_size * sizeof(uint8_t));
     bht_usebits[i] = (uint8_t*)malloc(tage_table_size * sizeof(uint8_t));
   }
+  for(i = 0; i< num_histories; i++){
+    for(j = 0; j< tage_table_size; j++){
+      bht_ctrs[i][j] = 0;
+      bht_tags[i][j] = 0;
+      bht_usebits[i][j] = 0;
+    }
+  }
 }
 
 uint8_t get_tag_tage(uint32_t pc){
-    return ((pc & 0xF0) >> 4);
+    return ((pc & 0x3C0) >> 4);
 }
 
 uint32_t get_index_tage(uint32_t pc, int history_bits){
@@ -399,12 +417,24 @@ uint32_t get_index_tage(uint32_t pc, int history_bits){
   uint32_t index = pc_lower_bits ^ ghistory_lower_bits;
   uint64_t temp64;
   uint32_t temp32;
-  while(running_xor < history_bits){
+  while(history_bits -  running_xor > tage_index_bits){
     temp64 = ghistory & ((tage_table_size -1) << running_xor);
-    temp64 = temp64 >> (running_xor - history_bits);
+    temp64 = temp64 >> running_xor;
     temp32 = temp64;
     index = index ^ temp32;
     running_xor += tage_index_bits;
+  }
+  if(verbose){
+    printf(" before leftover pc_lower_bits: %d, ghistory %lu, index: %d, pc: %d, history_bits: %d\n", pc_lower_bits, ghistory, index, pc, history_bits);
+  }
+  //Handle leftover bits
+  uint32_t leftover_bits = history_bits - running_xor;
+  uint64_t mask = (1<<leftover_bits)-1;
+  if(leftover_bits> 0){
+    temp64 = ghistory & (mask << (running_xor));
+    temp64 = temp64 >> (running_xor);
+    temp32 = temp64;
+    index = index ^ temp32;
   }
   if(verbose){
     printf("pc_lower_bits: %d, ghistory %lu, index: %d, pc: %d, history_bits: %d\n", pc_lower_bits, ghistory, index, pc, history_bits);
@@ -417,7 +447,7 @@ uint8_t make_prediction_tage(uint32_t pc){
   uint8_t prediction = make_prediction_bimodal(pc);
   int i = 0;
   for(i = 0; i< num_histories; i++){
-    int history_bits = tage_index_bits + tage_index_bits*i; 
+    int history_bits = tage_history_bits + tage_history_bits*i; 
     uint32_t index = get_index_tage(pc, history_bits);
     uint8_t tag = get_tag_tage(pc);
     if(bht_tags[i][index] == tag){
@@ -453,7 +483,7 @@ void train_tage(uint32_t pc, uint8_t outcome){
   int altpred_bht = -1;
   // Find pred and alt_pred bhts
   for(i = 0; i< num_histories; i++){
-    int history_bits = tage_index_bits + tage_index_bits*i; 
+    int history_bits = tage_history_bits + tage_history_bits*i; 
     uint32_t index = get_index_tage(pc, history_bits);
     uint8_t tag = get_tag_tage(pc);
     if(bht_tags[i][index] == tag){
@@ -480,8 +510,12 @@ void train_tage(uint32_t pc, uint8_t outcome){
     }
   }
   if(pred_bht > -1){
-    int pred_history_bits = tage_index_bits + tage_index_bits*pred_bht; 
+    int pred_history_bits = tage_history_bits + tage_history_bits*pred_bht; 
     uint32_t pred_index = get_index_tage(pc, pred_history_bits);
+    int altpred_history_bits = tage_history_bits + tage_history_bits*altpred_bht; 
+    uint32_t altpred_index = 0;
+    if(altpred_bht > -1)
+      altpred_index = get_index_tage(pc, altpred_history_bits);
     // If there's a prediction provider update it's counters. 
     switch(bht_ctrs[pred_bht][pred_index]){
       case WN:
@@ -511,11 +545,11 @@ void train_tage(uint32_t pc, uint8_t outcome){
   if(pred_bht < num_histories - 1){
     int allocated_entry = 0;
     for(i = pred_bht+1; i< num_histories; i++){
-      int new_entry_history_bits = tage_index_bits + tage_index_bits*i; 
+      int new_entry_history_bits = tage_history_bits + tage_history_bits*i; 
       uint32_t new_entry_index = get_index_tage(pc, new_entry_history_bits);
       uint8_t new_entry_tag = get_tag_tage(pc);
       if(bht_usebits[i][new_entry_index] == 0){
-        bht_ctrs[i][new_entry_index] = (outcome == TAKEN)?WT:WN;
+        bht_ctrs[i][new_entry_index] = (outcome == TAKEN)?ST:SN;
         bht_tags[i][new_entry_index] = new_entry_tag;
         allocated_entry = 1;
         break;
@@ -523,7 +557,7 @@ void train_tage(uint32_t pc, uint8_t outcome){
     }
     if(!allocated_entry){
       for(i = pred_bht+1; i< num_histories; i++){
-        int new_entry_history_bits = tage_index_bits + tage_index_bits*i; 
+        int new_entry_history_bits = tage_history_bits + tage_history_bits*i; 
         uint32_t new_entry_index = get_index_tage(pc, new_entry_history_bits);
         uint8_t new_entry_tag = get_tag_tage(pc);
         bht_usebits[i][new_entry_index]--;
@@ -532,7 +566,7 @@ void train_tage(uint32_t pc, uint8_t outcome){
   }
   //Update history
   ghistory = ((ghistory << 1) | outcome); 
-  if(prediction_count > 256000){
+  if(prediction_count > 512000){
     for(i = 0; i< num_histories; i++){
       int j = 0;
       for(j = 0; j< tage_table_size; j++){
@@ -558,6 +592,74 @@ void cleanup_tage(){
 }
 
 
+// Perceptron predictor functions
+
+void init_perceptron(){
+  perceptron_history_length = 59;
+  n_perceptrons = 200;
+  ghistory = 0;
+  threshold = (1.93*perceptron_history_length) + 14;
+  int i =0;
+  int j = 0;
+  perceptrons = (int**)malloc(n_perceptrons * sizeof(int*));
+  for(i= 0; i<n_perceptrons;i++){
+    perceptrons[i] = (int*)malloc((perceptron_history_length+1) * sizeof(int));
+    for(j = 0; j<perceptron_history_length+1; j++){
+      perceptrons[i][j] = 1;
+    }
+  }
+}
+
+int compute_perceptron_result(uint32_t pc){
+  int index = (pc>>2)%n_perceptrons;
+  int result = perceptrons[index][0];
+  int i = 0;
+  uint64_t temp = ghistory;
+  for(i = 1; i< perceptron_history_length+1; i++){
+    if((temp & (1<<i)) != 0){
+      result += perceptrons[index][i];
+    }
+    else{
+      result -= perceptrons[index][i];
+    }
+  }
+  return result;
+}
+
+uint8_t make_prediction_perceptron(uint32_t pc){
+  int result = compute_perceptron_result(pc);
+  return (result>0)?TAKEN:NOTTAKEN;
+}
+
+void train_perceptron(uint32_t pc, uint8_t outcome){
+  int index = (pc>>2)%n_perceptrons;
+  int result = compute_perceptron_result(pc);
+  int sign = (outcome == TAKEN)?1:-1;
+  int i = 0;
+  uint64_t temp = ghistory;
+  if((result>0 && outcome == NOTTAKEN) || abs(result) < threshold){
+    for(i = 1; i< perceptron_history_length+1; i++){
+      if((temp & (1<<i)) != 0){
+        perceptrons[index][i] = perceptrons[index][i] + sign;
+      }
+      else{
+        perceptrons[index][i] = perceptrons[index][i] - sign;
+      }
+    }
+    perceptrons[index][0] = perceptrons[index][0] + sign;
+  }
+  ghistory = ((ghistory << 1) | outcome); 
+  ghistory = ghistory & ((1<<perceptron_history_length)-1);
+}
+
+void cleanup_perceptron(){
+  int i = 0;
+  for(i= 0; i<n_perceptrons;i++){
+    free(perceptrons[i]);
+  }
+  free(perceptrons);
+}
+
 // Initialize the predictor
 void init_predictor() {
   //TODO: Initialize Branch Predictor Data Structures
@@ -568,11 +670,11 @@ void init_predictor() {
       init_gshare();
       break;
     case TOURNAMENT:
-  
     	init_tourn();
       break;
     case CUSTOM:
-      init_tage();
+      //init_tage();
+      init_perceptron();
       break;
     default:
       break;
@@ -591,10 +693,10 @@ uint8_t make_prediction(uint32_t pc){
     case GSHARE:
       return make_prediction_gshare(pc);
     case TOURNAMENT:
-  return make_prediction_tourn(pc);
-  //return NOTTAKEN;
+      return make_prediction_tourn(pc);
     case CUSTOM:
-      return make_prediction_tage(pc);
+      //return make_prediction_tage(pc);
+      return make_prediction_perceptron(pc);
     default:
       return NOTTAKEN;
   }
@@ -615,7 +717,8 @@ void train_predictor(uint32_t pc, uint8_t outcome){
   		train_tourn(pc,outcome);
       break;
     case CUSTOM:
-      train_tage(pc, outcome);
+      //train_tage(pc, outcome);
+      train_perceptron(pc, outcome);
       break;
     default:
       break;
@@ -632,10 +735,11 @@ void cleanup() {
       cleanup_gshare();
       break;
     case TOURNAMENT:
-    cleanup_tourn();
+      cleanup_tourn();
       break;
     case CUSTOM:
-      cleanup_tage();
+      //cleanup_tage();
+      cleanup_perceptron();
       break;
     default:
       break;
