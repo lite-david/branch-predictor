@@ -407,7 +407,7 @@ void init_tage(){
 }
 
 uint8_t get_tag_tage(uint32_t pc){
-    return ((pc & 0x3C0) >> 4);
+    return ((pc & 0x3C0) >> 6);
 }
 
 uint32_t get_index_tage(uint32_t pc, int history_bits){
@@ -445,23 +445,33 @@ uint32_t get_index_tage(uint32_t pc, int history_bits){
 uint8_t make_prediction_tage(uint32_t pc){
   prediction_count++;
   uint8_t prediction = make_prediction_bimodal(pc);
+  uint8_t pred_usebits = 0;
+  uint8_t pred_weak = 0;
+  uint8_t altpred = prediction;
   int i = 0;
   for(i = 0; i< num_histories; i++){
     int history_bits = tage_history_bits + tage_history_bits*i; 
     uint32_t index = get_index_tage(pc, history_bits);
     uint8_t tag = get_tag_tage(pc);
     if(bht_tags[i][index] == tag){
+      if(pred_usebits > 0)
+        altpred = prediction;
+      pred_usebits = bht_usebits[i][index];
       switch(bht_ctrs[i][index]){
         case WN:
+          pred_weak = 1;
           prediction = NOTTAKEN;
           break;
         case SN:
+          pred_weak = 0;
           prediction = NOTTAKEN;
           break;
         case WT:
+          pred_weak = 1;
           prediction = TAKEN;
           break;
         case ST:
+          pred_weak = 0;
           prediction = TAKEN;
           break;
         default:
@@ -470,7 +480,13 @@ uint8_t make_prediction_tage(uint32_t pc){
       }
     }
   }
-  return prediction;
+  //If the prediction is weak and usefulness is 0 use the *better* altpred
+  if(pred_usebits == 0 && pred_weak == 1){
+    return altpred;
+  }
+  else{
+    return prediction;
+  }
 }
 
 void train_tage(uint32_t pc, uint8_t outcome){
@@ -549,7 +565,7 @@ void train_tage(uint32_t pc, uint8_t outcome){
       uint32_t new_entry_index = get_index_tage(pc, new_entry_history_bits);
       uint8_t new_entry_tag = get_tag_tage(pc);
       if(bht_usebits[i][new_entry_index] == 0){
-        bht_ctrs[i][new_entry_index] = (outcome == TAKEN)?ST:SN;
+        bht_ctrs[i][new_entry_index] = (outcome == TAKEN)?WT:WN;
         bht_tags[i][new_entry_index] = new_entry_tag;
         allocated_entry = 1;
         break;
@@ -673,8 +689,8 @@ void init_predictor() {
     	init_tourn();
       break;
     case CUSTOM:
-      //init_tage();
-      init_perceptron();
+      init_tage();
+      //init_perceptron();
       break;
     default:
       break;
@@ -695,8 +711,8 @@ uint8_t make_prediction(uint32_t pc){
     case TOURNAMENT:
       return make_prediction_tourn(pc);
     case CUSTOM:
-      //return make_prediction_tage(pc);
-      return make_prediction_perceptron(pc);
+      return make_prediction_tage(pc);
+      //return make_prediction_perceptron(pc);
     default:
       return NOTTAKEN;
   }
@@ -717,8 +733,8 @@ void train_predictor(uint32_t pc, uint8_t outcome){
   		train_tourn(pc,outcome);
       break;
     case CUSTOM:
-      //train_tage(pc, outcome);
-      train_perceptron(pc, outcome);
+      train_tage(pc, outcome);
+      //train_perceptron(pc, outcome);
       break;
     default:
       break;
@@ -738,8 +754,8 @@ void cleanup() {
       cleanup_tourn();
       break;
     case CUSTOM:
-      //cleanup_tage();
-      cleanup_perceptron();
+      cleanup_tage();
+      //cleanup_perceptron();
       break;
     default:
       break;
