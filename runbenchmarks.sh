@@ -1,29 +1,31 @@
-echo "Running int_1 benchmark.."
-bunzip2 -kc traces/int_1.bz2 | ./src/predictor --gshare:13
-bunzip2 -kc traces/int_1.bz2 | ./src/predictor --tournament:9:10:10
-bunzip2 -kc traces/int_1.bz2 | ./src/predictor --custom
+total_gshare_mpi=0
+total_tourn_mpi=0
+total_custom_mpi=0
+declare -a benchmarks
+benchmarks=( int_1.bz2 int_2.bz2 fp_1.bz2 fp_2.bz2 mm_1.bz2 mm_2.bz2 )
+for benchmark in "${benchmarks[@]}"
+do
+  echo "Running $benchmark benchmark.."
+  output=`bunzip2 -kc traces/$benchmark | ./src/predictor --gshare:13`
+  echo -n "gshare:     ";echo $output
+  mpi=`echo $output | awk '{print $7;}'`
+  total_gshare_mpi=`echo "$total_gshare_mpi + $mpi" | bc`
+  
+  output=`bunzip2 -kc traces/$benchmark | ./src/predictor --tournament:9:10:10`
+  echo -n "tournament: ";echo $output
+  mpi=`echo $output | awk '{print $7;}'`
+  total_tourn_mpi=`echo "$total_tourn_mpi + $mpi" | bc`
+  
+  output=`bunzip2 -kc traces/$benchmark | ./src/predictor --custom`
+  echo -n "custom:     ";echo $output
+  mpi=`echo $output | awk '{print $7;}'`
+  total_custom_mpi=`echo "$total_custom_mpi + $mpi" | bc`
+done
+echo -n "Average misprediction for gshare predictor is: "
+echo "scale=4; $total_gshare_mpi/6" | bc
 
-echo "Running int_2 benchmark.."
-bunzip2 -kc traces/int_2.bz2 | ./src/predictor --gshare:13
-bunzip2 -kc traces/int_2.bz2 | ./src/predictor --tournament:9:10:10
-bunzip2 -kc traces/int_2.bz2 | ./src/predictor --custom
+echo -n "Average misprediction for tournament predictor is: "
+echo "scale=4; $total_tourn_mpi/6" | bc
 
-echo "Running fp_1 benchmark.."
-bunzip2 -kc traces/fp_1.bz2 | ./src/predictor --gshare:13
-bunzip2 -kc traces/fp_1.bz2 | ./src/predictor --tournament:9:10:10
-bunzip2 -kc traces/fp_1.bz2 | ./src/predictor --custom
-
-echo "Running fp_2 benchmark.."
-bunzip2 -kc traces/fp_2.bz2 | ./src/predictor --gshare:13
-bunzip2 -kc traces/fp_2.bz2 | ./src/predictor --tournament:9:10:10
-bunzip2 -kc traces/fp_2.bz2 | ./src/predictor --custom
-
-echo "Running mm_1 benchmark.."
-bunzip2 -kc traces/mm_1.bz2 | ./src/predictor --gshare:13
-bunzip2 -kc traces/mm_1.bz2 | ./src/predictor --tournament:9:10:10
-bunzip2 -kc traces/mm_1.bz2 | ./src/predictor --custom
-
-echo "Running mm_2 benchmark.."
-bunzip2 -kc traces/mm_2.bz2 | ./src/predictor --gshare:13
-bunzip2 -kc traces/mm_2.bz2 | ./src/predictor --tournament:9:10:10
-bunzip2 -kc traces/mm_2.bz2 | ./src/predictor --custom
+echo -n "Average misprediction for custom predictor is: "
+echo "scale=4; $total_custom_mpi/6" | bc
