@@ -444,7 +444,7 @@ uint32_t get_index_tage(uint32_t pc, int history_bits){
 
 uint8_t make_prediction_tage(uint32_t pc){
   prediction_count++;
-  uint8_t prediction = make_prediction_bimodal(pc);
+  uint8_t prediction = make_prediction_bimodal(pc>>2);
   uint8_t pred_usebits = 0;
   uint8_t pred_weak = 0;
   uint8_t altpred = prediction;
@@ -491,9 +491,9 @@ uint8_t make_prediction_tage(uint32_t pc){
 
 void train_tage(uint32_t pc, uint8_t outcome){
   //Train bimodal predictor
-  uint8_t prediction = make_prediction_bimodal(pc);
+  uint8_t prediction = make_prediction_bimodal(pc>>2);
   uint8_t altpred_prediction = prediction;
-  train_bimodal(pc, outcome);
+  train_bimodal(pc>>2, outcome);
   int i = 0;
   int pred_bht = -1;
   int altpred_bht = -1;
@@ -558,7 +558,7 @@ void train_tage(uint32_t pc, uint8_t outcome){
     }
   }
   // If the prediction provider isn't from the bht with longest history, (try to) allocate a new entry
-  if(pred_bht < num_histories - 1){
+  if(pred_bht < num_histories - 1 && prediction != outcome){
     int allocated_entry = 0;
     for(i = pred_bht+1; i< num_histories; i++){
       int new_entry_history_bits = tage_history_bits + tage_history_bits*i; 
@@ -611,8 +611,8 @@ void cleanup_tage(){
 // Perceptron predictor functions
 
 void init_perceptron(){
-  perceptron_history_length = 59;
-  n_perceptrons = 200;
+  perceptron_history_length = 31;
+  n_perceptrons = 256;
   ghistory = 0;
   threshold = (1.93*perceptron_history_length) + 14;
   int i =0;
