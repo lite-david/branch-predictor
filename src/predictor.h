@@ -30,7 +30,8 @@ extern const char *email;
 #define STATIC      0
 #define GSHARE      1
 #define TOURNAMENT  2
-#define CUSTOM      3
+#define TAGE        3
+#define CUSTOM      4
 extern const char *bpName[];
 
 // Definitions for 2-bit counters
@@ -45,6 +46,10 @@ extern const char *bpName[];
 extern int ghistoryBits; // Number of bits used for Global History
 extern int lhistoryBits; // Number of bits used for Local History
 extern int pcIndexBits;  // Number of bits used for PC index
+extern int num_histories; // Number of BHTs
+extern int tage_index_bits;
+extern int tage_history_bits;
+extern int bimodal_index_bits;
 extern int bpType;       // Branch Prediction Type
 extern int verbose;
 

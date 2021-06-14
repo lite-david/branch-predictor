@@ -28,6 +28,7 @@ usage()
   fprintf(stderr,"    static\n"
                  "    gshare:<# ghistory>\n"
                  "    tournament:<# ghistory>:<# lhistory>:<# index>\n"
+                 "    tage:<# tagged component index bits>:<# first tagged component history>:<# tagged components>:<# base predictor index bits>\n"
                  "    custom\n");
 }
 
@@ -47,6 +48,9 @@ handle_option(char *arg)
   } else if (!strncmp(arg,"--tournament:",13)) {
     bpType = TOURNAMENT;
     sscanf(arg+13,"%d:%d:%d", &ghistoryBits, &lhistoryBits, &pcIndexBits);
+  } else if (!strncmp(arg,"--tage:",7)) {
+    bpType = TAGE;
+    sscanf(arg+7,"%d:%d:%d:%d", &tage_index_bits, &tage_history_bits, &num_histories, &bimodal_index_bits);
   } else if (!strcmp(arg,"--custom")) {
     bpType = CUSTOM;
   } else if (!strcmp(arg,"--verbose")) {

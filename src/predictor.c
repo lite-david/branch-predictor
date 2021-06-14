@@ -21,8 +21,8 @@ const char *email       = "EMAIL";
 //------------------------------------//
 
 // Handy Global for use in output routines
-const char *bpName[4] = { "Static", "Gshare",
-                          "Tournament", "Custom" };
+const char *bpName[5] = { "Static", "Gshare",
+                          "Tournament", "Tage", "Custom" };
 
 int ghistoryBits; // Number of bits used for Global History
 int lhistoryBits; // Number of bits used for Local History
@@ -31,8 +31,10 @@ int bpType;       // Branch Prediction Type
 int verbose;
 
 //TAGE predictor settings
-int initial_history_bits; // Starting history length
 int num_histories; // Number of BHTs
+int tage_index_bits;
+int tage_history_bits;
+int bimodal_index_bits;
 
 //------------------------------------//
 //      Predictor Data Structures     //
@@ -58,15 +60,12 @@ uint64_t ghistory;
 uint8_t **bht_ctrs;
 uint8_t **bht_tags;
 uint8_t **bht_usebits;
-int tage_index_bits;
-int tage_history_bits;
 uint64_t tage_table_size;
 int prediction_count;
 uint8_t useful_bit_clear;
 
 //For bimodal predictor
 uint8_t *bimodal_table;
-int bimodal_index_bits;
 int bimodal_table_size;
 
 //For perceptron predictor
@@ -373,19 +372,12 @@ void cleanup_bimodal(){
 // TAGE functions
 
 void init_tage(){
-  //TAGE uses the gshare with 2 bit history as a base predictor 
-  bimodal_index_bits = 7;
   ghistory = 0;
-  tage_index_bits = 12;
-  tage_history_bits = 15;
   prediction_count = 0;
   useful_bit_clear = 0xFE;
   tage_table_size = 1<<tage_index_bits;
   init_bimodal();
-  //Improves upon base prediction with additional varying length tagged history tables 
-  num_histories = 2;
 
-  
   //Allocate additional BHTs and tag 
   bht_ctrs = (uint8_t**)malloc(num_histories*sizeof(uint8_t*));
   bht_usebits = (uint8_t**)malloc(num_histories*sizeof(uint8_t*));
@@ -408,6 +400,13 @@ void init_tage(){
 
 uint8_t get_tag_tage(uint32_t pc){
     return ((pc & 0x3C0) >> 6);
+}
+
+int get_history_bits(int n){
+  //Linear relationship
+  return tage_history_bits + tage_history_bits*n; 
+  //Geometric relationship
+  //return tage_history_bits*pow(2,n); 
 }
 
 uint32_t get_index_tage(uint32_t pc, int history_bits){
@@ -450,7 +449,7 @@ uint8_t make_prediction_tage(uint32_t pc){
   uint8_t altpred = prediction;
   int i = 0;
   for(i = 0; i< num_histories; i++){
-    int history_bits = tage_history_bits + tage_history_bits*i; 
+    int history_bits = get_history_bits(i);
     uint32_t index = get_index_tage(pc, history_bits);
     uint8_t tag = get_tag_tage(pc);
     if(bht_tags[i][index] == tag){
@@ -499,7 +498,7 @@ void train_tage(uint32_t pc, uint8_t outcome){
   int altpred_bht = -1;
   // Find pred and alt_pred bhts
   for(i = 0; i< num_histories; i++){
-    int history_bits = tage_history_bits + tage_history_bits*i; 
+    int history_bits = get_history_bits(i);
     uint32_t index = get_index_tage(pc, history_bits);
     uint8_t tag = get_tag_tage(pc);
     if(bht_tags[i][index] == tag){
@@ -526,9 +525,9 @@ void train_tage(uint32_t pc, uint8_t outcome){
     }
   }
   if(pred_bht > -1){
-    int pred_history_bits = tage_history_bits + tage_history_bits*pred_bht; 
+    int pred_history_bits = get_history_bits(pred_bht); 
     uint32_t pred_index = get_index_tage(pc, pred_history_bits);
-    int altpred_history_bits = tage_history_bits + tage_history_bits*altpred_bht; 
+    int altpred_history_bits = get_history_bits(altpred_bht); 
     uint32_t altpred_index = 0;
     if(altpred_bht > -1)
       altpred_index = get_index_tage(pc, altpred_history_bits);
@@ -561,7 +560,7 @@ void train_tage(uint32_t pc, uint8_t outcome){
   if(pred_bht < num_histories - 1 && prediction != outcome){
     int allocated_entry = 0;
     for(i = pred_bht+1; i< num_histories; i++){
-      int new_entry_history_bits = tage_history_bits + tage_history_bits*i; 
+      int new_entry_history_bits = get_history_bits(i); 
       uint32_t new_entry_index = get_index_tage(pc, new_entry_history_bits);
       uint8_t new_entry_tag = get_tag_tage(pc);
       if(bht_usebits[i][new_entry_index] == 0){
@@ -573,7 +572,7 @@ void train_tage(uint32_t pc, uint8_t outcome){
     }
     if(!allocated_entry){
       for(i = pred_bht+1; i< num_histories; i++){
-        int new_entry_history_bits = tage_history_bits + tage_history_bits*i; 
+        int new_entry_history_bits = get_history_bits(i);
         uint32_t new_entry_index = get_index_tage(pc, new_entry_history_bits);
         uint8_t new_entry_tag = get_tag_tage(pc);
         bht_usebits[i][new_entry_index]--;
@@ -688,6 +687,9 @@ void init_predictor() {
     case TOURNAMENT:
     	init_tourn();
       break;
+    case TAGE:
+      init_tage();
+      break;
     case CUSTOM:
       init_tage();
       //init_perceptron();
@@ -710,6 +712,8 @@ uint8_t make_prediction(uint32_t pc){
       return make_prediction_gshare(pc);
     case TOURNAMENT:
       return make_prediction_tourn(pc);
+    case TAGE:
+      return make_prediction_tage(pc);
     case CUSTOM:
       return make_prediction_tage(pc);
       //return make_prediction_perceptron(pc);
@@ -732,6 +736,9 @@ void train_predictor(uint32_t pc, uint8_t outcome){
     case TOURNAMENT:
   		train_tourn(pc,outcome);
       break;
+    case TAGE:
+      train_tage(pc, outcome);
+      break;
     case CUSTOM:
       train_tage(pc, outcome);
       //train_perceptron(pc, outcome);
@@ -752,6 +759,9 @@ void cleanup() {
       break;
     case TOURNAMENT:
       cleanup_tourn();
+      break;
+    case TAGE:
+      cleanup_tage();
       break;
     case CUSTOM:
       cleanup_tage();
