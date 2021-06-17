@@ -29,7 +29,7 @@ usage()
                  "    gshare:<# ghistory>\n"
                  "    tournament:<# ghistory>:<# lhistory>:<# index>\n"
                  "    tage:<# tagged component index bits>:<# first tagged component history>:<# tagged components>:<# base predictor index bits>\n"
-                 "    custom\n");
+                 "    perceptron:<# number of perceptrons>:<# history length>\n");
 }
 
 // Process an option and update the predictor
@@ -51,8 +51,9 @@ handle_option(char *arg)
   } else if (!strncmp(arg,"--tage:",7)) {
     bpType = TAGE;
     sscanf(arg+7,"%d:%d:%d:%d", &tage_index_bits, &tage_history_bits, &num_histories, &bimodal_index_bits);
-  } else if (!strcmp(arg,"--custom")) {
-    bpType = CUSTOM;
+  } else if (!strncmp(arg,"--perceptron:",13)) {
+    bpType = PERCEPTRON;
+    sscanf(arg+13,"%d:%d", &n_perceptrons, &perceptron_history_length);
   } else if (!strcmp(arg,"--verbose")) {
     verbose = 1;
   } else {

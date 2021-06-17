@@ -22,7 +22,7 @@ const char *email       = "EMAIL";
 
 // Handy Global for use in output routines
 const char *bpName[5] = { "Static", "Gshare",
-                          "Tournament", "Tage", "Custom" };
+                          "Tournament", "Tage", "Perceptron" };
 
 int ghistoryBits; // Number of bits used for Global History
 int lhistoryBits; // Number of bits used for Local History
@@ -610,8 +610,6 @@ void cleanup_tage(){
 // Perceptron predictor functions
 
 void init_perceptron(){
-  perceptron_history_length = 31;
-  n_perceptrons = 256;
   ghistory = 0;
   threshold = (1.93*perceptron_history_length) + 14;
   int i =0;
@@ -690,9 +688,8 @@ void init_predictor() {
     case TAGE:
       init_tage();
       break;
-    case CUSTOM:
-      init_tage();
-      //init_perceptron();
+    case PERCEPTRON:
+      init_perceptron();
       break;
     default:
       break;
@@ -714,9 +711,8 @@ uint8_t make_prediction(uint32_t pc){
       return make_prediction_tourn(pc);
     case TAGE:
       return make_prediction_tage(pc);
-    case CUSTOM:
-      return make_prediction_tage(pc);
-      //return make_prediction_perceptron(pc);
+    case PERCEPTRON:
+      return make_prediction_perceptron(pc);
     default:
       return NOTTAKEN;
   }
@@ -739,9 +735,8 @@ void train_predictor(uint32_t pc, uint8_t outcome){
     case TAGE:
       train_tage(pc, outcome);
       break;
-    case CUSTOM:
-      train_tage(pc, outcome);
-      //train_perceptron(pc, outcome);
+    case PERCEPTRON:
+      train_perceptron(pc, outcome);
       break;
     default:
       break;
@@ -763,9 +758,8 @@ void cleanup() {
     case TAGE:
       cleanup_tage();
       break;
-    case CUSTOM:
-      cleanup_tage();
-      //cleanup_perceptron();
+    case PERCEPTRON:
+      cleanup_perceptron();
       break;
     default:
       break;

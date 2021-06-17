@@ -31,7 +31,7 @@ extern const char *email;
 #define GSHARE      1
 #define TOURNAMENT  2
 #define TAGE        3
-#define CUSTOM      4
+#define PERCEPTRON      4
 extern const char *bpName[];
 
 // Definitions for 2-bit counters
@@ -52,6 +52,8 @@ extern int tage_history_bits;
 extern int bimodal_index_bits;
 extern int bpType;       // Branch Prediction Type
 extern int verbose;
+extern int perceptron_history_length;
+extern int n_perceptrons;
 
 //------------------------------------//
 //    Predictor Function Prototypes   //
