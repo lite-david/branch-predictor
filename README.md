@@ -1,84 +1,22 @@
-# branch-predictor
-CSE 240A branch predictor course project 
-=======
 # CSE240A Branch Predictor Project
+
+Implement gshare and tournament branch predictors. Also implement a custom predictor within a 64K bits budget to beat gshare and tournament. We have implemented TAGE and Perceptron as our custom predictors.
 
 ## Table of Contents
   * [Introduction](#introduction)
-  * [Code Integrity](#code-integrity)
-  * [Get started](#get-started)
-  * [Working with Docker](#working-with-docker)
   * [Traces](#traces)
   * [Running your predictor](#running-your-predictor)
   * [Implementing the predictors](#implementing-the-predictors)
     - [Gshare](#gshare)
     - [Tournament](#tournament)
-    - [Custom](#custom)
+    - [TAGE](#tage)
+    - [Perceptron](#perceptron)
     - [Things to note](#things-to-note)
-  * [Grading](#grading)
-    - [Grading the custom predictor](#grading-the-custom-predictor)
-  * [Turn-in Instructions](#turn-in-instructions)
 
 ## Introduction
 
-As we’ve discussed in class, branch prediction is critical to performance in modern processors.  An accurate branch predictor ensures that the front-end of the machine is capable of feeding the back-end with correct-path instructions. Beyond its criticality in processor execution, branch prediction is an interesting problem.  How do you make accurate predictions on little data using small, fast hardware structures.
+Highly accurate branch predictors are desirable in modern day processors to maximize performance. In this project we have implemented three branch prediction mechanisms: g-share, tournament and TAGE and compared the misprediction rate on the provided benchmarks. We also examine the storage requirements and tradeoffs for the TAGE predictor that impact the accuracy of the predictor.
 
-For this Project you will be implementing various branch predictors in a simulated environment.  We have provided a starting framework to help you design your predictors.  The framework (main.c) will perform all of the command-line switches as well as the reading in of the trace files.  You will implement your predictors by completing all of the TODOs in the predictor.c file.  Note that this is the only file in which you are able to make changes, as it will be the only file of yours we use for grading.
-
-## Code Integrity
-
-Please make sure you do not copy a single line of code from any source.  Not from other students, not from the web, not from anywhere.  We have very sophisticated tools to discover if you did.  This is a graduate class and we have the very highest expectations for integrity.  You should expect that if you do so, even in very small amounts, you will be caught, you will be asked to leave the program, and if an international student, required to leave the country.
-
-## Get Started
-
-As mentioned, we provide a starting framework to help you design your predictors. The source code (including some traces for testing) is in github and you can get it with `git clone https://github.com/prannoy/CSE240A.git`.
-
-Alternatively, you can download it from [our github page](https://github.com/prannoy/CSE240A.git).
-
-You have the option to write your project in C, C++ or Python. We only provide a framework written in C and we strongly recommend you use it, primarily to ensure compatibility with our autograder.
-
-If you decide to use some of the other supported languages, you will have to implement everything. You also have to make sure that running `make` in the src directory generates an executable named 'predictor'. During grading, our script will run a `make clean`, followed by a `make` command. Make sure that this step is not going to delete your code, especially if you are writing it in Python. Finally, make sure that your project runs with the exact same commands as this document describes. Python submissions must run with `./predictor`, without requiring `python ./predictor`. You can submit a custom Makefile to serve the needs of your code.
-
-## Working with Docker
-
-Your projects will be graded using gradescope and an automatic grader based on Docker. The compiler used by the autograder is gcc-5.4, and runs Ubuntu 16.04. You should be able to develop this project on your own machines, but in case you want to ensure compatibility with our autograder, we provide a Docker image with the same configuration.
-
-You will first have to install Docker (for simplicity consider Docker a very lightweight VM) on your machine (or in a VM), following the instructions found [here](https://docs.docker.com/get-started/). Once installed, you can pull our image by opening a shell (for Windows machines, powershell seems to work better than the cmd prompt) and typing:
-
-```
-docker pull prodromou87/ucsd_cse240a
-```
-
-This command will download and build our docker image. It will take a while, but you only have to do this step once. To verify that you have the image, you can run `docker images` and check the the image is listed.
-
-Once you have it, you can start an interactive shell in Docker with
-
-```
-docker run --rm -it prodromou87/ucsd_cse240a
-
-The --rm flag will delete the running container once
-you exit it so it doesn't keep consuming resources
-from the host machine.
-
-The -it flag will start an interactive session so it's
-necessary if you want a shell to work with.
-```
-
-
-For development purposes, you will want to mount the project directory in Docker so you can see your code, compile and run it. To do that, you change the previous instruction slightly:
-
-```
-docker run --rm -it -v /path/to/project/directory:/path/
-to/mount/point prodromou87/ucsd_cse240a
-
-Windows users will have to write the path as follows (No-
-  tice the lowercase 'c'):
-
-docker run --rm -it -v //c/path/to/project/directory:/path
-/to/mount/point prodromou87/ucsd_cse240a
-```
-
-If necessary, you can mount more directories with multiple `-v` flags. Once you get a shell, you can confirm the folder has been mounted with `ls /path/to/mount/point`. You can now compile and run your project following the instructions provided in this document. You can also modify the code on your host machine using your preferred editor and only switch to docker for compiling/running. You don't need to restart docker every time since changes in the mounted directory will immediately be visible in Docker.
 
 ## Traces
 
@@ -94,16 +32,14 @@ Sample Trace from int_1:
 0x40d81e 0
 ```
 
-We provide test traces to you to aid in testing your project but we strongly suggest that you create your own custom traces to use for debugging.
-
 
 ## Running your predictor
 
-In order to build your predictor you simply need to run `make` in the src/ directory of the project.  You can then run the program on an uncompressed trace as follows:   
+In order to build the predictors you simply need to run `make` in the src/ directory of the project.  You can then run the program on an uncompressed trace as follows:   
 
 `./predictor <options> [<trace>]`
 
-If no trace file is provided then the predictor will read in input from STDIN. Some of the traces we provided are rather large when uncompressed so we have distributed them compressed with bzip2 (included in the Docker image).  If you want to run your predictor on a compressed trace, then you can do so by doing the following:
+If no trace file is provided then the predictor will read in input from STDIN. Some of the traces we provided are rather large when uncompressed so we have distributed them compressed with bzip2. If you want to run your predictor on a compressed trace, then you can do so by doing the following:
 
 `bunzip2 -kc trace.bz2 | ./predictor <options>`
 
@@ -111,26 +47,62 @@ In either case the `<options>` that can be used to change the type of predictor
 being run are as follows:
 
 ```
-  --help       Print usage message
-  --verbose    Outputs all predictions made by your
-               mechanism. Will be used for correctness
-               grading.
-  --<type>     Branch prediction scheme. Available
-               types are:
-        static
-        gshare:<# ghistory>
-        tournament:<# ghistory>:<# lhistory>:<# index>
-        custom
+ --help       Print this message
+ --verbose    Print predictions on stdout
+ --<type>     Branch prediction scheme:
+    static
+    gshare:<# ghistory>
+    tournament:<# ghistory>:<# lhistory>:<# index>
+    tage:<# tagged component index bits>:<# first tagged component history>:<# tagged components>:<# base predictor index bits>
+    perceptron:<# number of perceptrons>:<# history length>
+
 ```
 An example of running a gshare predictor with 10 bits of history would be:   
 
 `bunzip2 -kc ../traces/int1_bz2 | ./predictor --gshare:10`
 
+A bash script is provided to run all benchmarks for all predictors. Run `make` in the project directory and then run `bash runbenchmarks.sh` and it will produce an output like this:
+
+```
+Running int_1.bz2 benchmark..
+gshare:     Branches: 3771697 Incorrect: 521958 Misprediction Rate: 13.839
+tournament: Branches: 3771697 Incorrect: 485664 Misprediction Rate: 12.877
+tage:      Branches: 3771697 Incorrect: 345638 Misprediction Rate: 9.164
+perceptron:Branches: 3771697 Incorrect: 341755 Misprediction Rate: 9.061
+Running int_2.bz2 benchmark..
+gshare:     Branches: 3755315 Incorrect: 15776 Misprediction Rate: 0.420
+tournament: Branches: 3755315 Incorrect: 17291 Misprediction Rate: 0.460
+tage:      Branches: 3755315 Incorrect: 11702 Misprediction Rate: 0.312
+perceptron:Branches: 3755315 Incorrect: 15305 Misprediction Rate: 0.408
+Running fp_1.bz2 benchmark..
+gshare:     Branches: 1546797 Incorrect: 12765 Misprediction Rate: 0.825
+tournament: Branches: 1546797 Incorrect: 15329 Misprediction Rate: 0.991
+tage:      Branches: 1546797 Incorrect: 12636 Misprediction Rate: 0.817
+perceptron:Branches: 1546797 Incorrect: 12641 Misprediction Rate: 0.817
+Running fp_2.bz2 benchmark..
+gshare:     Branches: 2422049 Incorrect: 40641 Misprediction Rate: 1.678
+tournament: Branches: 2422049 Incorrect: 74677 Misprediction Rate: 3.083
+tage:      Branches: 2422049 Incorrect: 26701 Misprediction Rate: 1.102
+perceptron:Branches: 2422049 Incorrect: 23344 Misprediction Rate: 0.964
+Running mm_1.bz2 benchmark..
+gshare:     Branches: 3014850 Incorrect: 201871 Misprediction Rate: 6.696
+tournament: Branches: 3014850 Incorrect: 153547 Misprediction Rate: 5.093
+tage:      Branches: 3014850 Incorrect: 83394 Misprediction Rate: 2.766
+perceptron:Branches: 3014850 Incorrect: 105757 Misprediction Rate: 3.508
+Running mm_2.bz2 benchmark..
+gshare:     Branches: 2563897 Incorrect: 259929 Misprediction Rate: 10.138
+tournament: Branches: 2563897 Incorrect: 223019 Misprediction Rate: 8.698
+tage:      Branches: 2563897 Incorrect: 193244 Misprediction Rate: 7.537
+perceptron:Branches: 2563897 Incorrect: 250405 Misprediction Rate: 9.767
+Average misprediction for gshare predictor is: 5.5993
+Average misprediction for tournament predictor is: 5.2003
+Average misprediction for tage is: 3.6163
+Average misprediction for perceptron is: 4.0875
+```
 
 ## Implementing the predictors
 
-There are 3 methods which need to be implemented in the predictor.c file.
-They are: **init_predictor**, **make_prediction**, and **train_predictor**.
+There are 4 methods which are implemented in the predictor.c file. They are: **init_predictor**, **make_prediction**, and **train_predictor** and **cleanup**.
 
 `void init_predictor();`
 
@@ -143,6 +115,10 @@ You will be given the PC of a branch and are required to make a prediction of TA
 `void train_predictor(uint32_t pc, uint8_t outcome);`
 
 Once a prediction is made a call to train_predictor will be made so that you can update any relevant data structures based on the true outcome of the branch. You may want to break up the implementation of each type of branch predictor into separate functions to improve readability.
+
+`void cleanup();`
+
+At the end of running the trace cleanup is called for each predictor to free up the dynamically allocated structures to avoid memory leaks.
 
 #### Gshare
 
@@ -162,13 +138,17 @@ Configuration:
 
 You will be implementing the Tournament Predictor popularized by the Alpha 21264.  The difference between the Alpha 21264's predictor and the one you will be implementing is that all of the underlying counters in yours will be 2-bit predictors.  You should NOT use a 3-bit counter as used in one of the structure of the Alpha 21264's predictor.  See the Alpha 21264 paper for more information on the general structure of this predictor.  The 'ghistoryBits' will be used to size the global and choice predictors while the 'lhistoryBits' and 'pcIndexBits' will be used to size the local predictor.
 
-#### Custom
+#### TAGE
 
-Now that you have implemented 3 other predictors with rigid requirements, you now have the opportunity to be creative and design your own predictor.  The only requirement is that the total size of your custom predictor must not exceed (64K + 256) bits (not bytes) of stored data and that your custom predictor must outperform both the Gshare and Tournament predictors (details below).
+The TAGE predictor proposed by A.Seznec and Pierre Michaud builds upon the PPM predictor. Originally PPM was used for text compression and then applied in branch prediction. Today TAGE is considered to be one of the best branch predictors and there are modifications proposed for it. For this project, we use the original TAGE predictor with a slight modification of using linear histories as compared to geometric histories. The original paper can be found [here](https://www.irisa.fr/caps/people/seznec/JILP-COTTAGE.pdf).
+
+#### Perceptron
+
+The Perceptron predictor proposed by Daniel A. Jimenez and Calvin Lin uses a table of perceptrons indexed by Program Counter to give accurate predictions. This predictor works well for linearly separable branches. The original paper can be found [here](https://www.cs.utexas.edu/~lin/papers/hpca01.pdf)
 
 #### Things to note
 
-All history should be initialized to NOTTAKEN.  History registers should be updated by shifting in new history to the least significant bit position.
+All history are initialized to NOTTAKEN.  History registers are updated by shifting in new history to the least significant bit position.
 ```
 Ex. 4 bits of history, outcome of next branch is NT
   T NT T NT   <<  NT
@@ -187,40 +167,3 @@ They should also have the following state transitions:
 
 The Choice Predictor used to select which predictor to use in the Alpha 21264 Tournament predictor should be initialized to Weakly select the Global Predictor.
 
-## Grading
-
-All grading will be done with respect to your predictor's Misprediciton Rate, as well as its correctness (for Gshare and Tournament) compared to our implementation.
-
-You get 10 points for correctness of the gshare and tournament predictors (20 points max grade for correctness). If your predictions match the correct output, you get full points. You get 15 points if your custom predictor beats one of the other two (gshare and tournament), and +15 points (30 total) if you beat both of them.
-
-Finally, the 6 best custom predictors (in terms of misprediction rate), will receive extra points. First place gets 6 points, second place gets 5, third gets 4 and so on. **The maximum grade is 56. If your custom predictor does not rank in the top 6, the maximum score you can get is 50/56.**
-
-If you are ranked in the top 6, we need a clear description (in comments in your code) of the number of bits you are using. For example, write something like: I implemented **[X]** as my custom predictor. **[Brief description of how it works]**. This predictor uses two structures. The first one is **[variable name in code]** and the second is **[variable name]**. Then for each structure present the math to calculate its size. We will verify its correctness before you receive the bonus points. Adjust the above text as necessary.
-
-You should do most of your development on your own machine. If you face any issues when you submit your project in gradescope, try to run your project in our Docker image to ensure compatibility with the autograder, or post the error message in Piazza.
-
-#### Grading the custom predictor
-
-We will be comparing your custom predictor against a Gshare predictor with 13 bits of global history (--global:13), which is the largest possible Gshare that fits the 16kb budget. We will also be comparing it against a Tournament predictor of about 14kb. This predictor uses 9 bits of global history, 10 bits of local history and 10 PC bits (--tournamet:9:10:10). These are the two predictors you have to outperform.
-
-For each predictor (gshare:13, tournament:9:10:10 and your custom predictor), we will calculate the average missprediction rate accross all 12 of our traces. Out of those 12, six are visible to you and provided along with the starter code to use during development. The remaining six will remain hidden. Your predictor's average missprediction rate must be better (lower) than the other two to get all the points (minus the bonus points for top ranked predictors).
-
-## Turn-in instructions
-
-**DUE: Nov 12 2019 - Submissions after 11:59:59 PM are considered late**
-
- A project is considered late at 12:00:01 AM (Which is 1 second past Midnight).
-
-To submit your project, compress the 'src' folder in a **.zip** (not .rar) file and upload it in gradescope. Select only the source files required for compilation and nothing else (binaries, traces etc should not be submitted). This will trigger our autograder to begin grading. You are allowed to submit multiple times.
-
-Gradescope has a time limit for autograders. Make sure that your code does not do anything unnecessary. For comparison purposes, we will announce our implementation's running time as soon as we optimize it.
-
-Our autograder runs two sets of tests:
-
-We first ensure that your code is compatible with our autograder. If your code fails any of these tests, you will be notified immediately, so don't leave the screen before you see the grading outcome. Specifically, this set of tests checks that:
-  - `make` produces an executable named `predictor`
-  - The output produced by your executable has the expected format
-
-Once you pass the compatibility test, we grade the output produced by your code. You will be able to see your score on some of our test cases, but some will be hidden. Your overall grade will not be visible until after the project's due date.
-
-**Note:** Gradescope expects pass/fail tests but we will be reporting percentages. If you don't score 100%, Gradescope considers it a failed tests. Do not be concerned when you see failed tests (but be concerned if your score is low and re-submit)
